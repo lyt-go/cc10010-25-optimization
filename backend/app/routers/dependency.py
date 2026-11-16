@@ -1,12 +1,11 @@
 """依赖解析接口：维护依赖关系，覆盖提交关系评审、生效关系、解除关系等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
 from app.services.dependency import DependencyService
+from app.services.impact import impact_service
 
 router = APIRouter(prefix="/api/dependency", tags=["依赖解析"])
 
@@ -27,6 +26,32 @@ def list_entries(
     if size > 200:
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
+    return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/export")
+def export_entries() -> dict:
+    """导出依赖解析清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "dependency", "total": total, "items": items}
+
+
+@router.get("/review-queue", response_model=PageResult[dict])
+def review_queue(
+    relation_no: str | None = Query(default=None, description="按关系编号过滤"),
+    page: int = 1,
+    size: int = 20,
+) -> PageResult[dict]:
+    """依赖解析侧待复核关系：读取影响对象数据清单并标出待复核关系。
+
+    数据与元数据存储侧同源于 impact_object，跨模块保留同一版本来源；
+    每条记录带过期字段与最后一版元数据，可直接定位问题。
+    """
+    if size > 200:
+        raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
+    items, total = impact_service.list_dependency_reviews(
+        relation_no=relation_no, page=page, size=size
+    )
     return PageResult(items=items, total=total, page=page, size=size)
 
 
@@ -56,10 +81,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出依赖解析清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "dependency", "total": total, "items": items}

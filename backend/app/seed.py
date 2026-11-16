@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.seed_impact import IMPACT_SEED_ROWS
+
 SEED_ROWS: dict[str, list[dict[str, Any]]] = {
     "etljob": [{'id': 1,
   'status': '草稿',
@@ -617,3 +619,6 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
   '审批人': '发布计划样例3',
   '发布状态': '发布计划样例3'}]
 }
+
+# 影响范围重算链路（元数据版本、过期批次、依赖字段、影响对象清单）的专用数据。
+SEED_ROWS.update(IMPACT_SEED_ROWS)

@@ -52,6 +52,7 @@ npm run dev
 | ETL作业 | `etljob` | 作业定义 | 作业编号、作业名称、源端数据表 |
 | 任务编排 | `dag` | 编排图 | 图编号、图名称、拓扑结构 |
 | 依赖解析 | `dependency` | 依赖关系 | 关系编号、上游作业、下游作业 |
+| 影响范围重算 | `impact` | 影响对象清单 | 批次编号、表编号、影响原因、版本来源号、复核状态 |
 | 源端校验 | `sourcecheck` | 校验配置 | 配置编号、源端数据表、行数下限 |
 | 运行实例 | `runtime` | 运行记录 | 记录编号、作业名称、开始时间 |
 | 异常重跑 | `rerun` | 重跑任务 | 任务编号、原始运行编号、重跑区间开始 |
@@ -73,6 +74,29 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 元数据影响范围重算
+
+针对元数据表过期后依赖关系与 SQL 模板仍引用旧字段的问题，新增 `impact` 模块，
+数据链路为：过期批次（`expire_batch`）+ 依赖字段（`dep_field`）+ 元数据版本
+（`metastore_version`）→ 影响对象数据清单（`impact_object`）。
+
+- 重算入口：`POST /api/impact/batches/{id}/recompute`，按批次从依赖字段与
+  元数据版本重算；同批次重复刷新只保留一组影响对象，按表落检查点，
+  中断后从「最后完整表」续算（`fail_after_tables` 可演练断点）。
+- 版本口径：同表影响对象、确认状态与表结构统一来自一个版本来源——优先取
+  最晚「已确认」版本；无已确认版本时取最大版本并整体标记「新版本待确认」。
+  重新确认版本（`POST /api/impact/versions/{id}/confirm`）后相关批次自动按
+  新字段结构重算。
+- 同源取数：元数据存储侧 `GET /api/metastore/impact-objects` 与依赖解析侧
+  `GET /api/dependency/review-queue` 都读同一张 `impact_object` 表；依赖侧记录
+  带待复核标志、过期字段与最后一版元数据，可直接定位问题。
+- 看板与视图：`GET /api/impact/board` 按影响原因（字段删除、字段改名、
+  结构不一致、模板别名失效、新版本待确认）排列；前端在「影响范围重算」
+  独立视图展示批次、版本、清单与最后一版元数据详情。
+- 验收测试：`backend/tests/test_impact_recalc.py`（服务层 10 项）与
+  `backend/tests/test_impact_api.py`（HTTP 接口级），可直接用
+  `.venv/bin/python tests/...` 运行。
 
 领域：数据工程
 子方向：数仓与数据湖

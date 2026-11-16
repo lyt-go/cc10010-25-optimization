@@ -4,6 +4,7 @@ import Overview from '@/views/Overview.vue'
 const Etljob = () => import('@/views/etljob/index.vue')
 const Dag = () => import('@/views/dag/index.vue')
 const Dependency = () => import('@/views/dependency/index.vue')
+const Impact = () => import('@/views/impact/index.vue')
 const Sourcecheck = () => import('@/views/sourcecheck/index.vue')
 const Runtime = () => import('@/views/runtime/index.vue')
 const Rerun = () => import('@/views/rerun/index.vue')
@@ -26,6 +27,7 @@ const router = createRouter({
     { path: '/etljob', name: 'etljob', component: Etljob },
     { path: '/dag', name: 'dag', component: Dag },
     { path: '/dependency', name: 'dependency', component: Dependency },
+    { path: '/impact', name: 'impact', component: Impact },
     { path: '/sourcecheck', name: 'sourcecheck', component: Sourcecheck },
     { path: '/runtime', name: 'runtime', component: Runtime },
     { path: '/rerun', name: 'rerun', component: Rerun },

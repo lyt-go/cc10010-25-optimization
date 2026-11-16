@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.services.impact import impact_service
 from app.services.metastore import MetastoreService
 
 router = APIRouter(prefix="/api/metastore", tags=["元数据存储"])
@@ -28,6 +29,51 @@ def list_entries(
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出元数据存储清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "metastore", "total": total, "items": items}
+
+
+@router.get("/impact-objects", response_model=PageResult[dict])
+def list_impact_objects(
+    table_code: str | None = Query(default=None, description="按表编号过滤"),
+    table_name: str | None = Query(default=None, description="按表名过滤"),
+    batch_id: int | None = Query(default=None, description="按过期批次过滤"),
+    reason: str | None = Query(default=None, description="按影响原因过滤"),
+    review_status: str | None = Query(default=None, description="待复核/已复核"),
+    page: int = 1,
+    size: int = 20,
+) -> PageResult[dict]:
+    """元数据存储侧读取影响对象数据清单。
+
+    与依赖解析侧共用 impact_service 的同一份 impact_object 数据，
+    每条记录都带版本来源号、确认状态与结构一致性，保证同源同版本。
+    """
+    if size > 200:
+        raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
+    items, total = impact_service.list_impacts(
+        table_code=table_code,
+        table_name=table_name,
+        batch_id=batch_id,
+        reason=reason,
+        review_status=review_status,
+        page=page,
+        size=size,
+    )
+    return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/{table_code}/last-version")
+def get_last_version(table_code: str) -> dict[str, Any]:
+    """详情用：读取一张表最后一版元数据记录。"""
+    version = impact_service.get_last_version(table_code)
+    if version is None:
+        raise HTTPException(status_code=404, detail=f"表 {table_code} 暂无元数据版本")
+    return version
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -56,10 +102,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出元数据存储清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "metastore", "total": total, "items": items}
